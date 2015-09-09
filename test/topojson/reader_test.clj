@@ -112,6 +112,6 @@
     (is 
       (=
        {:type "FeatureCollection"
-        :features [(read-json (slurp (clojure.java.io/resource "ex.geo.json")))]}
+        :features [(assoc (read-json (slurp (clojure.java.io/resource "ex.geo.json"))) :id "example")]}
        (topo2geo (read-json (slurp (clojure.java.io/resource "ex.topo.json"))))))))
 

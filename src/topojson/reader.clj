@@ -74,7 +74,7 @@
      {:type "FeatureCollection"
       :features (mapv 
                   (partial topo2geo (:transform topo) (decode-arcs topo (:arcs topo)))
-                  (mapv val (:objects topo)))})
+                  (mapv (fn[obj] (assoc (val obj) :id (or (:id (val obj)) (name (key obj))))) (:objects topo)))})
  ([transform arcs object]
    (condp = (:type object)
      "GeometryCollection"
