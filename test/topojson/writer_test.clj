@@ -1,5 +1,5 @@
 (ns topojson.writer-test
-  (:use [topojson.reader :only [read-json]])
+  (:use [topojson.reader :only [read-json topo2geo]])
   (:require [clojure.test :refer :all]
             [topojson.writer :refer :all]))
 
@@ -10,11 +10,10 @@
 
 (comment
 (deftest convert
-  (testing "converting"
-    (is 
-      (=
-       (read-json (slurp (clojure.java.io/resource "ex.topo.json")))
-       (geo2topo 
-         (assoc (read-json (slurp (clojure.java.io/resource "ex.geo.json"))) :id "example"))))))
-)
+  (let [ucs-topo   (read-json (slurp (clojure.java.io/resource "test/ucs.json")))
+        ti-topo    (read-json (slurp (clojure.java.io/resource "test/ti.json")))
+        both-topo  (read-json (slurp (clojure.java.io/resource "test/both.json")))
+        [ucs-geo ti-geo]  (topo2geo both-topo)]
+    (comment "Something something")
+    )))
 

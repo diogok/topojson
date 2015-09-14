@@ -112,6 +112,14 @@
     (is 
       (=
        {:type "FeatureCollection"
-        :features [(assoc (read-json (slurp (clojure.java.io/resource "ex.geo.json"))) :id "example")]}
-       (topo2geo (read-json (slurp (clojure.java.io/resource "ex.topo.json"))))))))
+        :features [(assoc (read-json (slurp (clojure.java.io/resource "test/ex.geo.json"))) :id "example")]}
+       (topo2geo (read-json (slurp (clojure.java.io/resource "test/ex.topo.json"))))))
+    (let [geo (topo2geo (read-json (slurp (clojure.java.io/resource "test/both.json"))))
+          [ti ucs] (:features geo)]
+      (is (= [-52.05331035490713 -14.414089852193786] 
+             (get-in ti [:features 0 :geometry :coordinates 0 0])))
+      (is (= [-40.97051904917276 -20.063224909534622]
+             (get-in ucs [:features 0 :geometry :coordinates 0 0])))
+      )
+    ))
 
