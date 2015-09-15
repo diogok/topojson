@@ -5,7 +5,7 @@
   [geojson] (json/read-str geojson :key-fn keyword))
 
 (defn can-round?
-  [value] (= value (float (int value))))
+  [value] (= value (Math/rint value)))
 
 (defn maybe-round
   [value] (if (can-round? value) (int value) value))
@@ -18,38 +18,47 @@
   (assoc (val kv) :id (or (:id (val kv)) (name (key kv)))))
 
 (defn decode-position-raw
-  [scale-x translate-x scale-y translate-y [x y]] 
+  [[^double scale-x ^double translate-x ^double scale-y ^double translate-y] [x y]] 
     [(maybe-round (+ (* x scale-x) translate-x))
      (maybe-round (+ (* y scale-y) translate-y))])
 
 (defn make-decoder
   [transform]
    (partial decode-position-raw 
-     (or (get-in transform [:scale 0]) 1)
-     (or (get-in transform [:translate 0]) 0)
-     (or (get-in transform [:scale 1]) 1)
-     (or (get-in transform [:translate 1]) 0)))
+     [(or (get-in transform [:scale 0]) 1.0)
+     (or (get-in transform [:translate 0]) 0.0)
+     (or (get-in transform [:scale 1]) 1.0)
+     (or (get-in transform [:translate 1]) 0.0)
+     ]))
 
 (defn decode-position 
-  ([transform [x y]] (decode-position transform x y))
-  ([transform x y] ((make-decoder transform) [x y])))
+  ([transform [^double x ^double y]] (decode-position transform x y))
+  ([transform ^double x ^double y] ((make-decoder transform) [x y])))
 
 (defn decode-arc
-  ([topo arc] 
-   (decode-arc (make-decoder (:transform topo)) 0 0 arc []))
-  ([decoder x y src-arc dst-arc]
-   (let [current  (first src-arc)
-         position [(+ x (first current)) (+ y (second current))]]
-     (if (nil? (next src-arc))
-       (conj dst-arc (decoder position))
-       (recur decoder
-        (first position) (last position) 
-        (rest src-arc)   (conj dst-arc (decoder position)))))))
+  [[^double scale-x ^double scale-y ^double translate-x ^double translate-y] arc]
+  (loop [current (first arc) arc (rest arc) x 0.0 y 0.0 dst (transient [])]
+    (if (nil? current) 
+      (persistent! dst)
+      (let [position [(+ (* (+ x (first current)) scale-x) translate-x) 
+                      (+ (* (+ y (second current)) scale-y) translate-y)]]
+        (recur (first arc)
+               (rest arc) 
+               (double (first position))
+               (double (last position))
+               (conj! dst [(maybe-round (first position)) (maybe-round (second position))]))))))
 
 (defn decode-arcs
   ([topo] (decode-arcs topo (:arcs topo)))
   ([topo arcs]
-   (into [] (map (partial decode-arc topo) arcs))))
+   (into []
+     (map
+       (partial decode-arc 
+                [(or (first (:scale (:transform topo))) 1.0)
+                 (or (second (:scale (:transform topo))) 1.0)
+                 (or (first (:translate (:transform topo))) 0.0)
+                 (or (second (:translate (:transform topo))) 0.0)])
+       arcs))))
 
 (defn get-arc 
   [arcs n]
