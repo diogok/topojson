@@ -121,7 +121,5 @@
       (is (= [-52.05331035490713 -14.414089852193786] 
              (get-in ti [:features 0 :geometry :coordinates 0 0])))
       (is (= [-40.97051904917276 -20.063224909534622]
-             (get-in ucs [:features 0 :geometry :coordinates 0 0])))
-      )
-    ))
+             (get-in ucs [:features 0 :geometry :coordinates 0 0]))))))
 

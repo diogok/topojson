@@ -28,8 +28,7 @@
      [(or (get-in transform [:scale 0]) 1.0)
      (or (get-in transform [:translate 0]) 0.0)
      (or (get-in transform [:scale 1]) 1.0)
-     (or (get-in transform [:translate 1]) 0.0)
-     ]))
+     (or (get-in transform [:translate 1]) 0.0)]))
 
 (defn decode-position 
   ([transform [^double x ^double y]] (decode-position transform x y))
@@ -40,13 +39,15 @@
   (loop [current (first arc) arc (rest arc) x 0.0 y 0.0 dst (transient [])]
     (if (nil? current) 
       (persistent! dst)
-      (let [position [(+ (* (+ x (first current)) scale-x) translate-x) 
-                      (+ (* (+ y (second current)) scale-y) translate-y)]]
+      (let [position [(+ x (first current)) 
+                      (+ y (second current))]]
         (recur (first arc)
                (rest arc) 
                (double (first position))
                (double (last position))
-               (conj! dst [(maybe-round (first position)) (maybe-round (second position))]))))))
+               (conj! dst 
+                [(maybe-round (+ (* (first position) scale-x) translate-x)) 
+                 (maybe-round (+ (* (second position) scale-y) translate-y))]))))))
 
 (defn decode-arcs
   ([topo] (decode-arcs topo (:arcs topo)))
