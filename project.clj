@@ -6,5 +6,7 @@
                  [org.clojure/data.json "0.2.5"]]
   :global-vars {*warn-on-reflection* true}
   :source-paths ["src"]
-  :profiles {:dev {:plugins [[com.jakemccrary/lein-test-refresh "0.9.0"]]}})
+  :profiles {:uberjar {:aot :all}
+             :dev {:dependencies [[midje "1.7.0"]]
+                   :plugins [[lein-midje "3.1.3"]]}})
 
