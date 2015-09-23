@@ -43,11 +43,15 @@
       )
       )))
 
+(defn indexed-arcs-1
+  [arcs] 
+  (apply hash-map (interleave arcs (map set arcs))))
+
 (defn indexed-arcs
   [arcs] 
-  (apply hash-map (interleave arcs (set arcs))))
+  (apply hash-map (interleave arcs (map (fn [arc] (apply hash-map (interleave arc arc))) arcs))))
 
-(defn cut-arc-0
+(defn cut-arc-1
   [index arc]
   (println "cut-arc" (count arc))
   (let [arcs (vals (dissoc index arc))]
@@ -57,28 +61,33 @@
       (fn [pair]
         (loop [arcs arcs]
           (if (empty? arcs) nil
-            (if (some #{pair} (first arcs))
+            (if ((first arcs) pair)
               pair
               (recur (rest arcs))
               ))))
       arc)))))
 
-(defn cut-arc
+(defn cut-arc-0
   [index arc]
   (println "cut-arc" (count arc))
   (let [arcs  (vals (dissoc index arc))
-        pairs (set arc)]
-    ;; try somethingwith intersects
+        pairs (set arc)
+        inter (time (intersection pairs arcs))]
     (time
     (doall
     (partition-by
-      (fn [pair]
-        (loop [arcs arcs]
-          (if (empty? arcs) nil
-            (if (some #{pair} (first arcs))
-              pair
-              (recur (rest arcs))
-              ))))
+      inter
+      arc)))))
+
+
+(defn cut-arc
+  [index arc]
+  (println "cut-arc" (count arc))
+  (let [arcs  (vals (dissoc index arc))]
+    (time
+    (doall
+    (partition-by
+      (fn [pair] (some (fn [arc] (arc pair)) arcs))
       arc)))))
 
 (defn cut-at-junctions
