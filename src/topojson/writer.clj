@@ -30,31 +30,67 @@
               (mapv extract-arcs (:features geo))))))
      nil))
 
+(defn indexed-arcs-0
+  [arcs] 
+  (println "index")
+  (let [index (time (apply hash-map (interleave arcs (map set arcs))))]
+    (time
+      (apply merge
+        (map 
+          (fn [arc]
+            {arc (apply union (vals (dissoc index arc)) )})
+        arcs)
+      )
+      )))
+
 (defn indexed-arcs
   [arcs] 
-  (apply hash-map (interleave arcs (map set arcs))))
+  (apply hash-map (interleave arcs (set arcs))))
+
+(defn cut-arc-0
+  [index arc]
+  (println "cut-arc" (count arc))
+  (let [arcs (vals (dissoc index arc))]
+    (time
+    (doall
+    (partition-by
+      (fn [pair]
+        (loop [arcs arcs]
+          (if (empty? arcs) nil
+            (if (some #{pair} (first arcs))
+              pair
+              (recur (rest arcs))
+              ))))
+      arc)))))
 
 (defn cut-arc
   [index arc]
-  (println "cut arc")
-  (let [index (time (apply union (vals (dissoc index arc))))]
-    (println "partition")
+  (println "cut-arc" (count arc))
+  (let [arcs  (vals (dissoc index arc))
+        pairs (set arc)]
+    ;; try somethingwith intersects
     (time
-    (doall (partition-by index arc))
-    )
-  )
-  )
+    (doall
+    (partition-by
+      (fn [pair]
+        (loop [arcs arcs]
+          (if (empty? arcs) nil
+            (if (some #{pair} (first arcs))
+              pair
+              (recur (rest arcs))
+              ))))
+      arc)))))
 
 (defn cut-at-junctions
   [arcs] 
-  (println "cut-at-junctions")
+  (println "cut-at-junctions" (count arcs))
   (let [index (time (indexed-arcs arcs))]
     (time
     (doall
+      (distinct
         (mapcat
           (partial cut-arc index)
-          arcs)))))
-          
+          arcs))))))
 
 (defn translate
   [arcs] 

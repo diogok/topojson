@@ -231,7 +231,7 @@
 #_(fact "Example convertion"
   (first (:features (topo2geo (geo2topo ex-geo)))) => ex-geo)
 
-(fact "Bigger convertion"
+#_(fact "Bigger convertion"
   (let [ucs-topo   (read-json (slurp (clojure.java.io/resource "test/ucs.json")))
         ti-topo    (read-json (slurp (clojure.java.io/resource "test/ti.json")))
         both-topo  (read-json (slurp (clojure.java.io/resource "test/both.json")))
