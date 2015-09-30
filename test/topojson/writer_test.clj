@@ -154,23 +154,23 @@
                [[2 1]]
                [[1.5 1.5] [1.7 1.7]]
                [[5 5] [6 6] [7 7] [5 5]]]]
-     (get-arcs-0 arcs
+     (get-arcs-0 (invert arcs )
        [[0 0] [0 1] [1 1] [1 0] [0 0]])
        => [0 1 2 3 0]
-     (get-arcs-0 arcs
+     (get-arcs-0 (invert arcs )
        [[1 1] [1 2] [2 2] [2 1] [1 1]])
       => [2 4 5 6 2]
-     (get-arcs-0 arcs
+     (get-arcs-0 (invert arcs )
        [[0 0] [0 1] [1 1]])
       => [0 1 2]
-     (get-arcs-0 arcs
+     (get-arcs-0 (invert arcs )
        [[1 1] [1.5 1.5] [1.7 1.7] [2 2]])
       => [2 7 5]
-     (get-arcs-0 arcs
+     (get-arcs-0 (invert arcs )
        [[5 5] [6 6] [7 7] [5 5]])
       => [8]))
 
-#_(fact "Full convertion"
+(fact "Full convertion"
    (let [geo {:type "FeatureCollection"
               :id "example"
               :features [
@@ -247,7 +247,7 @@
 #_(fact "Example convertion"
   (first (:features (topo2geo (geo2topo ex-geo)))) => ex-geo)
 
-(fact "Bigger convertion "
+#_(fact "Bigger convertion "
   (let [ti-topo    (read-json (slurp (clojure.java.io/resource "test/ti.json")))
         [ti-geo]   (:features (topo2geo ti-topo))]
     (time

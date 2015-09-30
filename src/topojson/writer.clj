@@ -50,8 +50,7 @@
 (defn cut-at-junctions
  [arcs] 
   (println "cut at junctions")
-  (time
-  (let [junctions (time (junctions arcs))]
+  (let [junctions (junctions arcs)]
    (loop [arc (first arcs)
           arcs (rest arcs)
           final-arcs (transient [])]
@@ -63,7 +62,7 @@
            (first arcs)
            (rest arcs)
            final-arcs))
-       (distinct (persistent! final-arcs)))))))
+       (distinct (persistent! final-arcs))))))
 
 (defn translate
   [arcs] 
@@ -161,36 +160,52 @@
   [topo] 
    (assoc topo :arcs (sequentialize-0 (:arcs topo))))
 
+(defn invert
+  [arcs] 
+  (loop [i 0 total (count arcs) inverted (transient {})]
+    (if (= i total) (persistent! inverted)
+      (recur 
+        (inc i)
+        total
+        (assoc! inverted (arcs i) i))
+      )
+    )
+  )
+
 (defn get-arcs-0
-  [arcs line]
+  [inverted-arcs line]
   (println "get-arcs-0")
-  (let [result (transient [])]
+  (time
+  (let [result   (transient [])]
     (doseq [start (range 0 (count line))
             limit (reverse (range 0 (inc (count line))))]
       (let [line (->> line (drop start) (take (- limit start)))]
         (if (not (empty? line))
-          (if-let [arc (some #{line} arcs)]
-            (conj! result (.indexOf arcs arc)))
-          )))
+          (if-let [arc-n (inverted-arcs line)]
+            (conj! result arc-n))
+          ))
+          )
     (persistent! result)))
+  )
 
 (defn get-arcs
   [arcs geo]
+  (let [get-arcs-1 (partial get-arcs-0 (invert (vec arcs )))]
   (condp = (:type geo)
     "Polygon"
-      (mapv (partial get-arcs-0 arcs) (:coordinates geo))
+      (mapv get-arcs-1 (:coordinates geo))
     "MultiPolygon"
       (mapv
         (fn [poly]
-          (mapv (partial get-arcs-0 arcs) poly))
+          (mapv get-arcs-1 poly))
         (:coordinates geo))
     "LineString"
-      (get-arcs-0 arcs (:coordinates geo))
+      (get-arcs-1 (:coordinates geo))
     "MultiLineString"
     (mapv
-      (partial get-arcs-0 arcs)
+      get-arcs-1
       (:coordinates geo))
-    nil))
+    nil)))
 
 (defn convert
   [transform arcs geo] 
@@ -239,5 +254,5 @@
      (-> single-geo
          (extract-arcs)
          (cut-at-junctions)
-         #_(as-topo geos))))
+         (as-topo geos))))
 
