@@ -1,5 +1,6 @@
 (ns topojson.writer
   (:require [topojson.reader :refer [maybe-round no-nil]])
+  (:require [clojure.data.json :as json])
   (:require [clojure.set :refer :all]))
 
 (defn run
@@ -34,17 +35,9 @@
 
 (defn junctions
   [arcs] 
-  (loop [arc  (set (first arcs)) 
-         arcs (map set (rest arcs))
-         junctions (transient [])]
-    (if (nil? arc)
-      (set (apply concat (persistent! junctions)))
-      (do
-        (recur 
-          (first arcs)
-          (rest arcs)
-          (conj! junctions (difference arc (apply (partial difference arc) arcs)))
-          )))))
+  (set
+  (map first (filter #(> (val %) 1) (frequencies (apply concat arcs))))
+  ))
 
 (defn cut-arcs
   [junctions feat]
@@ -101,7 +94,7 @@
 (defn extract-out
   [topo] 
    (let [feats     (apply concat (map :geometries (vals (topo :objects))))
-         raw-arcs  (distinct (apply concat (map collect-arcs-1 feats)))
+         raw-arcs  (distinct (apply concat (map collect-arcs-1 feats))) 
          arc-idx   (apply merge (map-indexed #(hash-map %2 %1) raw-arcs))]
      (assoc topo
        :arcs raw-arcs
@@ -268,4 +261,8 @@
       (scale)
       (transform-points)
       (sequentialize)))
+
+(defn write-json
+  [dest topo] 
+  (spit dest (json/write-str topo)))
 
