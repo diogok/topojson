@@ -38,14 +38,13 @@
          arcs (map set (rest arcs))
          junctions (transient [])]
     (if (nil? arc)
-      (set (persistent! junctions))
+      (set (apply concat (persistent! junctions)))
       (do
-        (doseq [pair (difference arc (apply (partial difference arc) arcs))]
-          (conj! junctions pair))
         (recur 
           (first arcs)
           (rest arcs)
-          junctions)))))
+          (conj! junctions (difference arc (apply (partial difference arc) arcs)))
+          )))))
 
 (defn cut-arcs
   [junctions feat]
