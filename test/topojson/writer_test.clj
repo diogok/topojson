@@ -193,7 +193,7 @@
                       }
                       {
                        :type "MultiLineString"
-                       :arcs [ [0 1 2] [2 4 5]]
+                       :arcs [[0 1 2] [2 4 5]]
                       }
                     ]
                   }
@@ -208,11 +208,22 @@
      (geo2topo geo) => topo
      (first (:features (topo2geo topo))) => geo))
 
-#_(fact "Bigger convertion "
+(fact "Example convetion"
+  (let [ex-geo-src  (read-json (slurp (clojure.java.io/resource "test/ex.geo.json")))
+        ex-topo-src (read-json (slurp (clojure.java.io/resource "test/ex.topo.json")))
+        ex-topo-dst (geo2topo (assoc ex-geo-src :id "example"))
+        ex-geo-dst (first (:features (topo2geo ex-topo-dst)))]
+    (comment ex-topo-dst => ex-topo-src)
+    (dissoc ex-geo-dst :id) => ex-geo-src
+    ))
+
+(fact "Bigger convertion "
   (let [ti-topo    (read-json (slurp (clojure.java.io/resource "test/ti.json")))
         [ti-geo]   (:features (topo2geo ti-topo))]
+    (topo2geo
     (time
-    (geo2topo ti-geo) 
+      (geo2topo ti-geo) 
     )
+    ) 
     ))
 

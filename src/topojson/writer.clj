@@ -40,10 +40,8 @@
     (if (nil? arc)
       (set (persistent! junctions))
       (do
-        (doseq [pair arc
-                arc arcs]
-          (if (arc pair)
-            (conj! junctions pair)))
+        (doseq [pair (difference arc (apply (partial difference arc) arcs))]
+          (conj! junctions pair))
         (recur 
           (first arcs)
           (rest arcs)
@@ -75,7 +73,7 @@
   [topo] 
    (let [feats     (apply concat (map :geometries (vals (topo :objects))))
          raw-arcs  (apply concat (map collect-arcs-0 feats))
-         cutter    (partial cut-arcs (junctions (distinct raw-arcs)))]
+         cutter    (partial cut-arcs (time (junctions (distinct raw-arcs))))]
      (assoc topo :objects
        (apply merge
          (map (partial cut-0 cutter) (:objects topo))))))
@@ -103,17 +101,14 @@
 
 (defn extract-out
   [topo] 
-  (println "extract out")
-   (time
    (let [feats     (apply concat (map :geometries (vals (topo :objects))))
-         raw-arcs  (time (distinct (apply concat (map collect-arcs-1 feats))) ) 
-         arc-idx   (time (apply merge (map-indexed #(hash-map %2 %1) raw-arcs)) )]
+         raw-arcs  (distinct (apply concat (map collect-arcs-1 feats)))
+         arc-idx   (apply merge (map-indexed #(hash-map %2 %1) raw-arcs))]
      (assoc topo
        :arcs raw-arcs
        :objects
        (apply merge
          (map (partial run (partial extract-1 arc-idx) :geometries) (:objects topo))))))
-   )
 
 (defn feat2geom
   [feat] 
@@ -144,7 +139,6 @@
 
 (defn sequentialize-0
   [arcs] 
-  (println "seqit")
   (mapv 
     (fn [arc]
       (loop [current (first arc) arc (rest arc) x 0.0 y 0.0 dst (transient [])]
@@ -267,7 +261,6 @@
 
 (defn geo2topo
   [ & geos ]
-  (println "Go!")
   (-> (apply topo geos)
       (extract-in)
       (cut)
