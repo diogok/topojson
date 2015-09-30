@@ -1,5 +1,6 @@
 (ns topojson.writer-test
   (:use [topojson.reader :only [read-json topo2geo]])
+  (:use [clojure.set])
   (:require [midje.sweet :refer :all]
             [topojson.writer :refer :all]))
 
@@ -77,9 +78,8 @@
          [[0 0] [0 1] [1 1]]
          [[1 1] [1 2] [2 2]]])
 
-(fact "Cut arcs at the junctions"
-  (vec
-  (cut-at-junctions
+(fact "Identify junctions"
+  (junctions
     [
      [[0 0] [0 1] [1 1] [1 0] [0 0]]
      [[1 1] [1 2] [2 2] [2 1] [1 1]]
@@ -87,7 +87,23 @@
      [[1 1] [1 2] [2 2]]
      [[1 1] [1.5 1.5] [1.7 1.7] [2 2]]
      [[5 5] [6 6] [7 7] [5 5]]])
-  )
+  => 
+     (set
+      [[0 0]
+      [0 1]
+      [1 1]
+      [1 2]
+      [2 2]]))
+
+(fact "Cut arcs at the junctions"
+  (vec
+    (cut-at-junctions
+      [[[0 0] [0 1] [1 1] [1 0] [0 0]]
+       [[1 1] [1 2] [2 2] [2 1] [1 1]]
+       [[0 0] [0 1] [1 1]]
+       [[1 1] [1 2] [2 2]]
+       [[1 1] [1.5 1.5] [1.7 1.7] [2 2]]
+       [[5 5] [6 6] [7 7] [5 5]]]))
   => [[[0 0]]
       [[0 1]]
       [[1 1]]
@@ -232,10 +248,8 @@
   (first (:features (topo2geo (geo2topo ex-geo)))) => ex-geo)
 
 (fact "Bigger convertion "
-  (let [ucs-topo   (read-json (slurp (clojure.java.io/resource "test/ucs.json")))
-        ti-topo    (read-json (slurp (clojure.java.io/resource "test/ti.json")))
-        both-topo  (read-json (slurp (clojure.java.io/resource "test/both.json")))
-        [ti-geo ucs-geo]  (:features (topo2geo both-topo) )]
+  (let [ti-topo    (read-json (slurp (clojure.java.io/resource "test/ti.json")))
+        [ti-geo]   (:features (topo2geo ti-topo))]
     (time
     (geo2topo ti-geo)
     )

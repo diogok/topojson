@@ -30,103 +30,63 @@
               (mapv extract-arcs (:features geo))))))
      nil))
 
-(defn indexed-arcs-0
+(defn junctions
   [arcs] 
-  (println "index")
-  (let [index (time (apply hash-map (interleave arcs (map set arcs))))]
-    (time
-      (apply merge
-        (map 
-          (fn [arc]
-            {arc (apply union (vals (dissoc index arc)) )})
-        arcs)
-      )
-      )))
-
-(defn indexed-arcs-1
-  [arcs] 
-  (apply hash-map (interleave arcs (map set arcs))))
-
-(defn indexed-arcs
-  [arcs] 
-  (apply hash-map (interleave arcs (map (fn [arc] (apply hash-map (interleave arc arc))) arcs))))
-
-(defn cut-arc-1
-  [index arc]
-  (println "cut-arc" (count arc))
-  (let [arcs (vals (dissoc index arc))]
-    (time
-    (doall
-    (partition-by
-      (fn [pair]
-        (loop [arcs arcs]
-          (if (empty? arcs) nil
-            (if ((first arcs) pair)
-              pair
-              (recur (rest arcs))
-              ))))
-      arc)))))
-
-(defn cut-arc-0
-  [index arc]
-  (println "cut-arc" (count arc))
-  (let [arcs  (vals (dissoc index arc))
-        pairs (set arc)
-        inter (time (intersection pairs arcs))]
-    (time
-    (doall
-    (partition-by
-      inter
-      arc)))))
-
-
-(defn cut-arc
-  [index arc]
-  (println "cut-arc" (count arc))
-  (let [arcs  (vals (dissoc index arc))]
-    (time
-    (doall
-    (partition-by
-      (fn [pair] (some (fn [arc] (arc pair)) arcs))
-      arc)))))
+  (loop [arc  (set (first arcs)) 
+         arcs (doall (map set (rest arcs)))
+         junctions (transient [])]
+    (if (not (nil? arc)) 
+      (do
+        (doseq [pair arc
+                arc arcs]
+          (if (arc pair)
+            (conj! junctions pair)))
+        (recur 
+          (first arcs)
+          (rest arcs)
+          junctions))
+      (set (persistent! junctions)))))
 
 (defn cut-at-junctions
-  [arcs] 
-  (println "cut-at-junctions" (count arcs))
-  (let [index (time (indexed-arcs arcs))]
-    (time
-    (doall
-      (distinct
-        (mapcat
-          (partial cut-arc index)
-          arcs))))))
+ [arcs] 
+  (println "cut at junctions")
+  (time
+  (let [junctions (time (junctions arcs))]
+   (loop [arc (first arcs)
+          arcs (rest arcs)
+          final-arcs (transient [])]
+     (if (not (nil? arc))
+       (do
+         (doseq [part (partition-by junctions arc)]
+           (conj! final-arcs part))
+         (recur 
+           (first arcs)
+           (rest arcs)
+           final-arcs))
+       (distinct (persistent! final-arcs)))))))
 
 (defn translate
   [arcs] 
   (println "translate")
-   (let [flat-arcs (time (doall (apply concat arcs)))
-         firsts    (time (doall (map first flat-arcs)) )
-         seconds   (time (doall (map second flat-arcs)) )
+   (let [flat-arcs (doall (apply concat arcs))
+         firsts    (doall (map first flat-arcs))
+         seconds   (doall (map second flat-arcs)) 
 
-         s-firsts  (time (sort firsts) )
-         s-seconds (time (sort seconds) )
-         n-points  (time (count firsts) )
-         halfway   (time (quot n-points 2) )
+         s-firsts  (sort firsts)
+         s-seconds (sort seconds)
+         n-points  (count firsts)
+         halfway   (quot n-points 2)
 
-         med-1 (time (if (odd? n-points)
+         med-1 (if (odd? n-points)
                  (nth s-firsts halfway)
                  (/ (+ (nth s-firsts halfway) 
                        (nth s-firsts (dec halfway)))))
- )
-         med-2 (time (if (odd? n-points)
+         med-2 (if (odd? n-points)
                  (nth s-seconds halfway)
                  (/ (+ (nth s-seconds halfway) 
-                       (nth s-seconds (dec halfway)))))
- )         
-         ]
+                       (nth s-seconds (dec halfway)))))]
      {:translate [med-1 med-2] 
       :arcs
-      (time
       (mapv 
              (fn [arc]
                (mapv
@@ -134,9 +94,7 @@
                    [(- (first pair) med-1) 
                     (- (second pair) med-2)])
                  arc))
-             arcs)
-      )
-      }))
+             arcs)}))
 
 (defn scale
   [arcs]
@@ -281,5 +239,5 @@
      (-> single-geo
          (extract-arcs)
          (cut-at-junctions)
-         (as-topo geos))))
+         #_(as-topo geos))))
 
