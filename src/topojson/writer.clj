@@ -33,17 +33,11 @@
       (apply concat (apply concat (:arcs feat)))
     []))
 
-(defn junctions
-  [arcs] 
-  (set
-  (map first (filter #(> (val %) 1) (frequencies (apply concat arcs))))
-  ))
-
 (defn cut-arcs
   [junctions feat]
   (condp = (:type feat)
     "LineString" 
-      (assoc feat :arcs (mapv vec (partition-by junctions (:arcs feat)) ))
+      (assoc feat :arcs (mapv vec (partition-by junctions (:arcs feat))))
     "MultiLineString" 
       (assoc feat :arcs (mapv #(mapv vec (partition-by junctions %)) (:arcs feat)))
     "Polygon" 
@@ -55,6 +49,20 @@
            (:arcs feat)))
     feat))
 
+(defn dups 
+  [seq]
+  (for [[id freq] (frequencies seq) 
+        :when (> freq 1)]
+       id))
+
+(defn junctions
+  [arcs] 
+  (set 
+    (into []
+      (comp (filter #(> (val %) 1))
+            (map first))
+      (frequencies (apply concat arcs)))))
+
 (defn cut-0
   [cutter geo]
   {(key geo)
@@ -63,12 +71,15 @@
 
 (defn cut 
   [topo] 
+  (println "cut")
+   (time
    (let [feats     (apply concat (map :geometries (vals (topo :objects))))
          raw-arcs  (apply concat (map collect-arcs-0 feats))
-         cutter    (partial cut-arcs (time (junctions (distinct raw-arcs))))]
+         cutter    (partial cut-arcs (junctions (distinct raw-arcs)))]
      (assoc topo :objects
        (apply merge
          (map (partial cut-0 cutter) (:objects topo))))))
+   )
 
 (defn extract-2
   [idx geo]
@@ -93,6 +104,8 @@
 
 (defn extract-out
   [topo] 
+  (println "extract")
+   (time
    (let [feats     (apply concat (map :geometries (vals (topo :objects))))
          raw-arcs  (distinct (apply concat (map collect-arcs-1 feats))) 
          arc-idx   (apply merge (map-indexed #(hash-map %2 %1) raw-arcs))]
@@ -101,6 +114,7 @@
        :objects
        (apply merge
          (map (partial run (partial extract-1 arc-idx) :geometries) (:objects topo))))))
+   )
 
 (defn feat2geom
   [feat] 
@@ -131,6 +145,8 @@
 
 (defn sequentialize-0
   [arcs] 
+  (println "seq")
+  (time
   (mapv 
     (fn [arc]
       (loop [current (first arc) arc (rest arc) x 0.0 y 0.0 dst (transient [])]
@@ -144,6 +160,7 @@
                    (double (last position))
                    (conj! dst (mapv maybe-round position)))))))
     arcs))
+  )
 
 (defn sequentialize
   [topo] 
@@ -151,13 +168,15 @@
 
 (defn translate
   [topo] 
+  (println "trans")
+   (time
    (let [arcs (:arcs topo)
 
-         flat-arcs (apply concat arcs)
+         flat-arcs (apply concat arcs) 
          firsts    (map first flat-arcs)
          seconds   (map second flat-arcs)
 
-         s-firsts  (sort firsts)
+         s-firsts  (sort firsts) 
          s-seconds (sort seconds)
          n-points  (count firsts)
          halfway   (quot n-points 2)
@@ -181,6 +200,7 @@
                     (- (second pair) med-2)])
                  arc))
              arcs))))
+   )
 
 (defn scale
   [topo]
@@ -260,7 +280,8 @@
       (translate)
       (scale)
       (transform-points)
-      (sequentialize)))
+      (sequentialize)
+      ))
 
 (defn write-json
   [dest topo] 
