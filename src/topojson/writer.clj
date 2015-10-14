@@ -9,6 +9,7 @@
 (def ^:dynamic *type* double)
 
 (defn collect-coords
+  "Collect all coordinates from a feature, acording to its type."
   [feat] 
   (condp = (:type feat)
     "Point"
@@ -26,6 +27,7 @@
     []))
 
 (defn collect-arcs-0
+  "Collect all arcs from a feature, but keep the depth of it."
   [feat] 
   (condp = (:type feat)
     "LineString" 
@@ -39,6 +41,7 @@
     []))
 
 (defn collect-arcs-1
+  "Collect all arcs from a feature and flatten it."
   [feat] 
   (condp = (:type feat)
     "LineString" 
@@ -69,16 +72,18 @@
 (def geos-sel
   (comp-paths [ALL :features ALL :geometry]))
 
+(def arc-sel
+  (comp-paths [ALL LAST :geometries ALL]))
+
 (defn collect-arcs-2
+  "Alternative to collect-arcs-1 to collect flatten arcs."
   [feat]
    (if (:arcs feat)
      (compiled-select (sels-2 (:type feat)) feat)
      []))
 
-(def arc-sel
-  (comp-paths [ALL LAST :geometries ALL]))
-
 (defn cut-arcs
+  "Cut the arcs of the feature on the junctions"
   [junctions feat]
   (if (:arcs feat)
     (compiled-transform 
@@ -88,6 +93,7 @@
     feat))
 
 (defn extract-arcs
+  "Maps the arcs of the features to the index of arcs."
   [idx geo]
   (condp = (:type geo)
     "LineString" 
@@ -115,6 +121,7 @@
       geo))
 
 (defn delta
+  "Make the arc line/ring a delta."
   [pairs] 
     (loop [current (first pairs) rest-pairs (next pairs) x 0.0 y 0.0 dst (transient [])]
       (if (nil? current) 
@@ -128,6 +135,7 @@
                  (conj! dst (mapv maybe-round position)))))))
 
 (defn transform-0 [transform [lng lat]]
+  "Transform (scale and translate) a point."
   [(maybe-round (*type* (/ (- lng (first (:translate transform))) (first (:scale transform)))) )
    (maybe-round (*type* (/ (- lat (second (:translate transform))) (second (:scale transform)))))])  
 
@@ -148,6 +156,7 @@
   })
 
 (defn feat-transform
+  "Transform (scale and translate) a feature"
   [quantum feat] 
    (compiled-transform 
      (transform-sel (:type feat))
@@ -157,6 +166,7 @@
 
 (defn feat2geom
   [feat] 
+  "Convert a GeoJSON feature to a TopoJSON geometry base structure"
   (no-nil
     {:type (:type (:geometry feat))
      :id (:id feat)
@@ -267,6 +277,7 @@
     }))
 
 (defn geo2topo
+  "Convert all geojson to a single topojson"
   [ & geos ] 
   (dissoc (processor {:geos geos})
     :all-coords-raw
@@ -280,6 +291,7 @@
     :arcs-idx))
 
 (defn write-json
+  "Write json to file dest"
   [dest topo] 
   (spit dest (json/write-str topo)))
 

@@ -1,4 +1,4 @@
-(defproject topojson "0.0.1"
+(defproject topojson "0.0.1-SNAPSHOT"
   :description "TopoJSON for Clojure"
   :url "http://github.com/diogok/topojson"
   :license {:name "MIT"}

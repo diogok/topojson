@@ -1,31 +1,35 @@
 # topojson
 
-Read and Write TopoJSON to and from GeoJSON, in clojure.
+Read and write [TopoJSON](https://github.com/mbostock/topojson/wiki) to and from [GeoJSON](http://geojson.org), in clojure.
 
 ## Usage
 
+Include the dependency in your project:
+
+[![Clojars Project](http://clojars.org/topojson/latest-version.svg)](http://clojars.org/topojson)
+
 ### Reading 
 
-This convert an TopoJSON to a GeoJSON.
+This convert a TopoJSON structure to a GeoJSON data structure.
 
 ```clojure
 (use ['topojson.reader :only ('topo2geo 'read-json)])
 
-(def geojson (topo2geo (read-json "example.topo.json")))
+(def topojson (read-json "example.topo.json"))
+(def geojson (topo2geo topojson))
 ```
 
 ### Writing
 
-This convert from a GeoJSON to a TopoJSON.
+This converts a GeoJSON into a TopoJSON structure.
 
 ```clojure
 (use ['topojson.reader :only ('read-json)])
 (use ['topojson.writer :only ('geo2topo)])
 
-(def topojson (geo2topo (read-json "example.geo.json")))
+(def geojson  (read-json "example.geo.json"))
+(def topojson (geo2topo geojson))
 ```
-
-TODO
 
 ## License
 
