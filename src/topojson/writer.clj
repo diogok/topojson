@@ -6,6 +6,7 @@
   (:require [clojure.data.json :as json]))
 
 (def ^:dynamic *q* 1e4)
+(def ^:dynamic *type* double)
 
 (defn collect-coords
   [feat] 
@@ -50,20 +51,40 @@
       (apply concat (apply concat (:arcs feat)))
     []))
 
+(def sels
+  {"LineString" (comp-paths :arcs)
+   "MultiLineString" (comp-paths :arcs ALL)
+   "Polygon" (comp-paths :arcs ALL)
+   "MultiPolygon" (comp-paths :arcs ALL ALL)})
+
+(def sels-2
+  {"LineString" (comp-paths :arcs ALL)
+   "MultiLineString" (comp-paths :arcs ALL ALL)
+   "Polygon" (comp-paths :arcs ALL ALL)
+   "MultiPolygon" (comp-paths :arcs ALL ALL ALL)})
+
+(def arc-sel
+  (comp-paths [ALL LAST :geometries ALL]))
+
+(def geos-sel
+  (comp-paths [ALL :features ALL :geometry]))
+
+(defn collect-arcs-2
+  [feat]
+   (if (:arcs feat)
+     (compiled-select (sels-2 (:type feat)) feat)
+     []))
+
+(def arc-sel
+  (comp-paths [ALL LAST :geometries ALL]))
+
 (defn cut-arcs
   [junctions feat]
-  (condp = (:type feat)
-    "LineString" 
-      (assoc feat :arcs (mapv vec (partition-by junctions (:arcs feat))))
-    "MultiLineString" 
-      (assoc feat :arcs (mapv #(mapv vec (partition-by junctions %)) (:arcs feat)))
-    "Polygon" 
-      (assoc feat :arcs (mapv #(mapv vec (partition-by junctions %)) (:arcs feat)))
-    "MultiPolygon" 
-      (assoc feat :arcs
-       (mapv 
-         (fn [p] (mapv #(mapv vec (partition-by junctions %)) p))
-           (:arcs feat)))
+  (if (:arcs feat)
+    (compiled-transform 
+      (sels (:type feat))
+      (partial partition-by junctions)
+      feat)
     feat))
 
 (defn extract-arcs
@@ -107,29 +128,32 @@
                  (conj! dst (mapv maybe-round position)))))))
 
 (defn transform-0 [transform [lng lat]]
-  [(/ (- lng (first (:translate transform))) (first (:scale transform)))
-   (/ (- lat (second (:translate transform))) (second (:scale transform)))])
+  [(maybe-round (*type* (/ (- lng (first (:translate transform))) (first (:scale transform)))) )
+   (maybe-round (*type* (/ (- lat (second (:translate transform))) (second (:scale transform)))))])  
 
-(defn transform-sel
-  [feat]
-  (condp = (:type feat)
+(def transform-sel
+  {
     "Point"
-      [:coordinates]
+      (comp-paths :coordinates)
     "MultiPoint" 
-      [:coordinates ALL]
+      (comp-paths :coordinates ALL)
     "LineString" 
-      [:coordinates ALL]
+      (comp-paths :coordinates ALL)
     "MultiLineString" 
-      [:coordinates ALL ALL]
+      (comp-paths :coordinates ALL ALL)
     "Polygon" 
-      [:coordinates ALL ALL]
+      (comp-paths :coordinates ALL ALL)
     "MultiPolygon" 
-      [:coordinates ALL ALL ALL]
-    []))
+      (comp-paths :coordinates ALL ALL ALL)
+  })
 
 (defn feat-transform
   [quantum feat] 
-   (transform (transform-sel feat) (partial transform-0 quantum) feat))
+   (compiled-transform 
+     (transform-sel (:type feat))
+     (partial transform-0 quantum)
+     feat))
+
 
 (defn feat2geom
   [feat] 
@@ -146,40 +170,22 @@
                   (not (= (:type (:geometry feat)) "MultiPoint")))
                   (:coordinates (:geometry feat)))}))
 
-(defn geocol
-  [geo] 
-  (let [id (or (:id geo) (str "id" (hash geo)))]
-    {(keyword id)
-      (no-nil
-        {:type "GeometryCollection"
-         :id id
-         :properties (:properties geo)
-         :geometries (mapv feat2geom (:features geo))
-         })}))
-
 (def processor
  (graph/compile 
    {:type (fnk [] "Topology" )
     :all-coords-raw
       (fnk [geos] 
-        (time
-        (do (println "all")
-          (doall
-            (->> geos
-                 (map :features)
-                 (apply concat)
-                 (map :geometry)
-                 (map collect-coords)
-                 (apply concat)
-                 (map distinct-fast)
-                 (apply concat)
-                 )))))
+        (->> geos
+           (select [ALL :features ALL :geometry])
+           (map collect-coords)
+           (apply concat)
+           (map distinct-fast)
+           (apply concat)))
     :quantum
       (fnk [all-coords-raw]
-        (time (do (println "quantums")
-         (if (not *q*)
-           {:scale  [ 1 1]
-            :translate [1 1]}
+        (if (not *q*)
+          {:scale  [ 1 1]
+           :translate [1 1]}
          (let [lngs  (distinct-fast (map first all-coords-raw))
                lats  (distinct-fast (map second all-coords-raw))
 
@@ -200,102 +206,78 @@
              {:scale  [(/ 1 kx) (/ 1 ky)]
               :translate [x0 y0]}
              )
-           ))))
+           ))
     :transform (fnk [quantum] quantum)
     :geos-transformed
       (fnk [geos quantum]
-        (transform [ALL :features ALL :geometry]
+        (compiled-transform geos-sel
           (partial feat-transform quantum)
           geos))
     :objects-raw
       (fnk [geos-transformed] 
-        (apply merge
-          (map geocol geos-transformed)))
-    :feats-raw
-      (fnk [objects-raw] 
-        (apply concat
-          (select [ALL LAST :geometries]
-             objects-raw)))
+        (for-map [geo geos-transformed]
+          (keyword (or (:id geo) (str "geo" (hash geo))))
+          (no-nil
+            {:type "GeometryCollection"
+             :id (or (:id geo) (str "geo" (hash geo))) 
+             :properties (:properties geo)
+             :geometries (mapv feat2geom (:features geo))
+             })))
     :all-coords
-      (fnk [quantum all-coords-raw]
-        (time
-        (do (println "all-coords")
-        (doall
-          (map (partial transform-0 quantum) all-coords-raw)
-        )
-        )
-        ))
+      (fnk [objects-raw]
+        (->> objects-raw
+          (compiled-select arc-sel)
+          (map collect-arcs-2)
+          (map distinct-fast)
+          (apply concat)))
     :junctions
       (fnk [all-coords] 
-        (time (do (println "juncs")
-          (set
-            (select
-              [ALL #(> (last %) 1) FIRST]
-              (frequencies all-coords))))))
+        (->> all-coords
+           (frequencies)
+           (filter #(> (val %) 1))
+           (keys)
+           (set)))
     :objects-cut
       (fnk [objects-raw junctions]
-        (time (do (println "feats-cut")
-          (transform
-            [ALL LAST :geometries ALL]
-            (partial cut-arcs junctions)
-            objects-raw)
-        )))
+        (transform
+          [ALL LAST :geometries ALL]
+          (partial cut-arcs junctions)
+          objects-raw))
     :arcs-raw
       (fnk [objects-cut]
-        (time (do (println "arcs")
-          (doall
-          (->> objects-cut
-            (vals)
-            (mapv :geometries)
-            (apply concat)
-            (mapv collect-arcs-1)
-            (apply concat)
-            (distinct-fast)
-            (vec))))))
+        (->> objects-cut
+          (compiled-select arc-sel)
+          (map collect-arcs-2)
+          (apply concat)
+          (distinct-fast)
+          (vec)))
     :arcs-idx
       (fnk [arcs-raw]
-           (time (do (println "idx")
-              (for-map [i (range 0 (count arcs-raw))]
-                (get arcs-raw i) i))))
+        (for-map [i (range 0 (count arcs-raw))]
+          (get arcs-raw i) i))
     :objects 
       (fnk [arcs-idx objects-cut]
-          (time
-          (do (println "arced")
           (transform
             [ALL LAST :geometries ALL]
             (partial extract-arcs arcs-idx)
-            objects-cut
-            ))
-          )
-          )
+            objects-cut))
     :arcs 
      (fnk [arcs-raw]
-        (time 
-(do (println "delta")
-
         (mapv delta arcs-raw))
-)
-        )
     }))
 
 (defn geo2topo
   [ & geos ] 
   (dissoc (processor {:geos geos})
-    :topo
-    :feats
-    :all-arcs
-    :all-raw-arcs
-    :all-coords
     :all-coords-raw
-    :arcs-idx
-    :geos-transformed
     :quantum
-    :junctions
+    :geos-transformed
     :objects-raw
-    :feats-raw
-    :arcs-raw
+    :all-coords
+    :junctions
     :objects-cut
-    :feats-arced))
+    :arcs-raw
+    :arcs-idx))
 
 (defn write-json
   [dest topo] 
