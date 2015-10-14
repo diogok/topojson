@@ -5,6 +5,8 @@
   (:require [topojson.reader :refer [maybe-round no-nil]])
   (:require [clojure.data.json :as json]))
 
+(def ^:dynamic *q* 1e4)
+
 (defn collect-coords
   [feat] 
   (condp = (:type feat)
@@ -100,13 +102,13 @@
                         (- (last current) y)]]
           (recur (first rest-pairs)
                  (next rest-pairs) 
-                 (double (+ x (first position) ))
-                 (double (+ y (last position)) )
+                 (double (+ x (first position)))
+                 (double (+ y (last position)))
                  (conj! dst (mapv maybe-round position)))))))
 
 (defn transform-0 [transform [lng lat]]
-  [(maybe-round (/ (- lng (first (:translate transform))) (first (:scale transform))))
-   (maybe-round (/ (- lat (second (:translate transform))) (second (:scale transform))))])
+  [(/ (- lng (first (:translate transform))) (first (:scale transform)))
+   (/ (- lat (second (:translate transform))) (second (:scale transform)))])
 
 (defn transform-sel
   [feat]
@@ -169,11 +171,15 @@
                  (map :geometry)
                  (map collect-coords)
                  (apply concat)
+                 (map distinct-fast)
                  (apply concat)
                  )))))
     :quantum
       (fnk [all-coords-raw]
         (time (do (println "quantums")
+         (if (not *q*)
+           {:scale  [ 1 1]
+            :translate [1 1]}
          (let [lngs  (distinct-fast (map first all-coords-raw))
                lats  (distinct-fast (map second all-coords-raw))
 
@@ -185,10 +191,16 @@
                xd (- x1 x0)
                yd (- y1 y0)
 
-               kx (if (zero? xd) 1 (/ (- 1e4 1) xd))
-               ky (if (zero? yd) 1 (/ (- 1e4 1) yd))]
-           {:scale  [(/ 1 kx) (/ 1 ky)]
-            :translate [x0 y0]}))))
+               qd- (- *q* 1)
+
+               qd (if (zero? qd-) 1 qd-)
+
+               kx (if (zero? xd) 1 (/ qd xd))
+               ky (if (zero? yd) 1 (/ qd yd))]
+             {:scale  [(/ 1 kx) (/ 1 ky)]
+              :translate [x0 y0]}
+             )
+           ))))
     :transform (fnk [quantum] quantum)
     :geos-transformed
       (fnk [geos quantum]
@@ -205,14 +217,14 @@
           (select [ALL LAST :geometries]
              objects-raw)))
     :all-coords
-      (fnk [feats-raw]
+      (fnk [quantum all-coords-raw]
         (time
         (do (println "all-coords")
         (doall
-          (apply concat (mapv distinct (apply concat (map collect-arcs-0 feats-raw)) )))
+          (map (partial transform-0 quantum) all-coords-raw)
         )
         )
-        )
+        ))
     :junctions
       (fnk [all-coords] 
         (time (do (println "juncs")
@@ -281,6 +293,7 @@
     :junctions
     :objects-raw
     :feats-raw
+    :arcs-raw
     :objects-cut
     :feats-arced))
 
