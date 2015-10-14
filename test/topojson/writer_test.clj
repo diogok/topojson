@@ -4,6 +4,7 @@
   (:require [midje.sweet :refer :all]
             [topojson.writer :refer :all]))
 
+(comment
 (fact "Can extract a few arcs"
   (feat2geom
    {:type "Feature"
@@ -20,7 +21,7 @@
     => {:type "Polygon"
         :arcs [[[0 0] [0 1] [1 1] [1 0] [0 0]]]}
 
-  (extract-0
+  (mapv feat2geom
      [{:type "Feature"
        :geometry {
          :type "Point"
@@ -210,23 +211,26 @@
                       [[1 0]]]}]
      (geo2topo geo) => topo
      (first (:features (topo2geo topo))) => geo))
+)
 
-(fact "Example convetion"
+
+(fact "Example convertion"
   (let [ex-geo-src  (read-json (slurp (clojure.java.io/resource "test/ex.geo.json")))
         ex-topo-src (read-json (slurp (clojure.java.io/resource "test/ex.topo.json")))
         ex-topo-dst (geo2topo (assoc ex-geo-src :id "example"))
-        ex-geo-dst (first (:features (topo2geo ex-topo-dst)))]
-    (comment ex-topo-dst => ex-topo-src)
+        ex-geo-dst  (first (:features (topo2geo ex-topo-dst)))]
+    (clojure.pprint/pprint ex-topo-dst)
+    ex-topo-dst => ex-topo-src
     (dissoc ex-geo-dst :id) => ex-geo-src
     ))
 
 (fact "Bigger convertion "
-  (let [ti-topo    (read-json (slurp (clojure.java.io/resource "test/ti.json")))
-        [ti-geo]   (:features (topo2geo ti-topo))]
-    (topo2geo
+  (let [
+        ti-topo    (read-json (slurp (clojure.java.io/resource "test/ti.json")))
+        [ti-geo]   (:features (topo2geo ti-topo))
+        ]
     (time
       (geo2topo ti-geo) 
     )
-    ) 
     ))
 

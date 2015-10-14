@@ -1,11 +1,26 @@
 (ns topojson.writer
+  (:require [plumbing.core :refer :all])
+  (:require [plumbing.graph :as graph])
+  (:require [com.rpl.specter :refer :all])
   (:require [topojson.reader :refer [maybe-round no-nil]])
-  (:require [clojure.data.json :as json])
-  (:require [clojure.set :refer :all]))
+  (:require [clojure.data.json :as json]))
 
-(defn run
-  [fun k obj] 
-  {(key obj) (assoc (val obj) k (fun (k (val obj))))})
+(defn collect-coords
+  [feat] 
+  (condp = (:type feat)
+    "Point"
+      [[(:coordinates feat)]]
+    "MultiPoint" 
+      [(:coordinates feat)]
+    "LineString" 
+      [(:coordinates feat)]
+    "MultiLineString" 
+      (:coordinates feat)
+    "Polygon" 
+      (:coordinates feat)
+    "MultiPolygon" 
+      (apply concat (:coordinates feat))
+    []))
 
 (defn collect-arcs-0
   [feat] 
@@ -49,72 +64,70 @@
            (:arcs feat)))
     feat))
 
-(defn dups 
-  [seq]
-  (for [[id freq] (frequencies seq) 
-        :when (> freq 1)]
-       id))
-
-(defn junctions
-  [arcs] 
-  (set 
-    (into []
-      (comp (filter #(> (val %) 1))
-            (map first))
-      (frequencies (apply concat arcs)))))
-
-(defn cut-0
-  [cutter geo]
-  {(key geo)
-   (assoc (val geo) :geometries
-     (mapv cutter (:geometries (val geo))))})
-
-(defn cut 
-  [topo] 
-  (println "cut")
-   (time
-   (let [feats     (apply concat (map :geometries (vals (topo :objects))))
-         raw-arcs  (apply concat (map collect-arcs-0 feats))
-         cutter    (partial cut-arcs (junctions (distinct raw-arcs)))]
-     (assoc topo :objects
-       (apply merge
-         (map (partial cut-0 cutter) (:objects topo))))))
-   )
-
-(defn extract-2
+(defn extract-arcs
   [idx geo]
   (condp = (:type geo)
     "LineString" 
       (assoc geo :arcs 
-        (idx (:arcs geo)))
+        (mapv idx (:arcs geo)))
     "MultiLineString" 
       (assoc geo :arcs
-        (mapv idx (:arcs geo)))
+        (mapv
+          (fn [line] (mapv idx line))
+            (:arcs geo)))
     "Polygon" 
       (assoc geo :arcs
-        (mapv idx (:arcs geo)))
+        (mapv 
+         (fn [ring] (mapv idx ring))
+            (:arcs geo)))
     "MultiPolygon" 
       (assoc geo :arcs
-        (mapv (partial mapv idx) (:arcs geo)))
+        (mapv 
+          (fn [poly]
+           (mapv
+             (fn [ring] 
+               (mapv idx ring))
+             poly))
+          (:arcs geo)))
       geo))
 
-(defn extract-1
-  [arcs geos]
-  (mapv (partial extract-2 (partial mapv arcs)) geos))
+(defn delta
+  [pairs] 
+    (loop [current (first pairs) rest-pairs (next pairs) x 0.0 y 0.0 dst (transient [])]
+      (if (nil? current) 
+        (persistent! dst)
+        (let [position [(- (first current) x) 
+                        (- (last current) y)]]
+          (recur (first rest-pairs)
+                 (next rest-pairs) 
+                 (double (+ x (first position) ))
+                 (double (+ y (last position)) )
+                 (conj! dst (mapv maybe-round position)))))))
 
-(defn extract-out
-  [topo] 
-  (println "extract")
-   (time
-   (let [feats     (apply concat (map :geometries (vals (topo :objects))))
-         raw-arcs  (distinct (apply concat (map collect-arcs-1 feats))) 
-         arc-idx   (apply merge (map-indexed #(hash-map %2 %1) raw-arcs))]
-     (assoc topo
-       :arcs raw-arcs
-       :objects
-       (apply merge
-         (map (partial run (partial extract-1 arc-idx) :geometries) (:objects topo))))))
-   )
+(defn transform-0 [transform [lng lat]]
+  [(maybe-round (/ (- lng (first (:translate transform))) (first (:scale transform))))
+   (maybe-round (/ (- lat (second (:translate transform))) (second (:scale transform))))])
+
+(defn transform-sel
+  [feat]
+  (condp = (:type feat)
+    "Point"
+      [:coordinates]
+    "MultiPoint" 
+      [:coordinates ALL]
+    "LineString" 
+      [:coordinates ALL]
+    "MultiLineString" 
+      [:coordinates ALL ALL]
+    "Polygon" 
+      [:coordinates ALL ALL]
+    "MultiPolygon" 
+      [:coordinates ALL ALL ALL]
+    []))
+
+(defn feat-transform
+  [quantum feat] 
+   (transform (transform-sel feat) (partial transform-0 quantum) feat))
 
 (defn feat2geom
   [feat] 
@@ -131,157 +144,145 @@
                   (not (= (:type (:geometry feat)) "MultiPoint")))
                   (:coordinates (:geometry feat)))}))
 
-(defn extract-0
+(defn geocol
   [geo] 
-  (mapv feat2geom geo))
+  (let [id (or (:id geo) (str "id" (hash geo)))]
+    {(keyword id)
+      (no-nil
+        {:type "GeometryCollection"
+         :id id
+         :properties (:properties geo)
+         :geometries (mapv feat2geom (:features geo))
+         })}))
 
-(defn extract-in
-  [topo] 
-  (assoc topo :objects
-    (apply merge
-       (map
-         (partial run extract-0 :geometries)
-         (:objects topo)))))
+(def processor
+ (graph/compile 
+   {:type (fnk [] "Topology" )
+    :all-coords-raw
+      (fnk [geos] 
+        (time
+        (do (println "all")
+          (doall
+            (->> geos
+                 (map :features)
+                 (apply concat)
+                 (map :geometry)
+                 (map collect-coords)
+                 (apply concat)
+                 (apply concat)
+                 )))))
+    :quantum
+      (fnk [all-coords-raw]
+        (time (do (println "quantums")
+         (let [lngs  (distinct-fast (map first all-coords-raw))
+               lats  (distinct-fast (map second all-coords-raw))
 
-(defn sequentialize-0
-  [arcs] 
-  (println "seq")
-  (time
-  (mapv 
-    (fn [arc]
-      (loop [current (first arc) arc (rest arc) x 0.0 y 0.0 dst (transient [])]
-        (if (nil? current) 
-          (persistent! dst)
-          (let [position [(- (first current) x) 
-                          (- (second current) y)]]
-            (recur (first arc)
-                   (rest arc) 
-                   (double (first position))
-                   (double (last position))
-                   (conj! dst (mapv maybe-round position)))))))
-    arcs))
-  )
+               x0 (apply min lngs)
+               y0 (apply min lats)
+               x1 (apply max lngs)
+               y1 (apply max lats)
 
-(defn sequentialize
-  [topo] 
-   (assoc topo :arcs (sequentialize-0 (:arcs topo))))
+               xd (- x1 x0)
+               yd (- y1 y0)
 
-(defn translate
-  [topo] 
-  (println "trans")
-   (time
-   (let [arcs (:arcs topo)
+               kx (if (zero? xd) 1 (/ (- 1e4 1) xd))
+               ky (if (zero? yd) 1 (/ (- 1e4 1) yd))]
+           {:scale  [(/ 1 kx) (/ 1 ky)]
+            :translate [x0 y0]}))))
+    :transform (fnk [quantum] quantum)
+    :geos-transformed
+      (fnk [geos quantum]
+        (transform [ALL :features ALL :geometry]
+          (partial feat-transform quantum)
+          geos))
+    :objects-raw
+      (fnk [geos-transformed] 
+        (apply merge
+          (map geocol geos-transformed)))
+    :feats-raw
+      (fnk [objects-raw] 
+        (apply concat
+          (select [ALL LAST :geometries]
+             objects-raw)))
+    :all-coords
+      (fnk [feats-raw]
+        (time
+        (do (println "all-coords")
+        (doall
+          (apply concat (mapv distinct (apply concat (map collect-arcs-0 feats-raw)) )))
+        )
+        )
+        )
+    :junctions
+      (fnk [all-coords] 
+        (time (do (println "juncs")
+          (set
+            (select
+              [ALL #(> (last %) 1) FIRST]
+              (frequencies all-coords))))))
+    :objects-cut
+      (fnk [objects-raw junctions]
+        (time (do (println "feats-cut")
+          (transform
+            [ALL LAST :geometries ALL]
+            (partial cut-arcs junctions)
+            objects-raw)
+        )))
+    :arcs-raw
+      (fnk [objects-cut]
+        (time (do (println "arcs")
+          (doall
+          (->> objects-cut
+            (vals)
+            (mapv :geometries)
+            (apply concat)
+            (mapv collect-arcs-1)
+            (apply concat)
+            (distinct-fast)
+            (vec))))))
+    :arcs-idx
+      (fnk [arcs-raw]
+           (time (do (println "idx")
+              (for-map [i (range 0 (count arcs-raw))]
+                (get arcs-raw i) i))))
+    :objects 
+      (fnk [arcs-idx objects-cut]
+          (time
+          (do (println "arced")
+          (transform
+            [ALL LAST :geometries ALL]
+            (partial extract-arcs arcs-idx)
+            objects-cut
+            ))
+          )
+          )
+    :arcs 
+     (fnk [arcs-raw]
+        (time 
+(do (println "delta")
 
-         flat-arcs (apply concat arcs) 
-         firsts    (map first flat-arcs)
-         seconds   (map second flat-arcs)
-
-         s-firsts  (sort firsts) 
-         s-seconds (sort seconds)
-         n-points  (count firsts)
-         halfway   (quot n-points 2)
-
-         med-1 (if (odd? n-points)
-                 (nth s-firsts halfway)
-                 (/ (+ (nth s-firsts halfway) 
-                       (nth s-firsts (dec halfway)))))
-         med-2 (if (odd? n-points)
-                 (nth s-seconds halfway)
-                 (/ (+ (nth s-seconds halfway) 
-                       (nth s-seconds (dec halfway)))))]
-     (assoc topo
-      :transform {:translate [med-1 med-2]}
-      :arcs
-          (mapv 
-             (fn [arc]
-               (mapv
-                 (fn [pair]
-                   [(- (first pair) med-1) 
-                    (- (second pair) med-2)])
-                 arc))
-             arcs))))
-   )
-
-(defn scale
-  [topo]
-  (let [arcs (:arcs topo)
-
-        flat-arcs (apply concat arcs)
-        firsts    (map first flat-arcs)
-        seconds   (map second flat-arcs)
-
-        min-firsts (apply min firsts)
-        max-firsts (apply max firsts)
-        min-seconds (apply min seconds)
-        max-seconds (apply max seconds)
-
-        ok-1 (/ (+ min-firsts max-firsts) 2)
-        ok-2 (/ (+ min-seconds max-seconds) 2)
-
-        k-1 (if (zero? ok-1) 1 ok-1)
-        k-2 (if (zero? ok-2) 1 ok-2)]
-    (assoc topo
-     :transform {:scale [k-1 k-2] :translate (:translate (:transform topo))}
-     :arcs (mapv 
-             (fn [arc]
-               (mapv
-                 (fn [pair]
-                   [(maybe-round (/ (first pair)  k-1)) 
-                    (maybe-round (/ (second pair) k-2))])
-                 arc))
-             arcs))))
-
-(defn transform-points-0
-  [trans geos] 
-  (mapv 
-    (fn [geo]
-      (if (= (:type geo) "Point")
-        (assoc geo :coordinates 
-            [(maybe-round (/ (- (first (:coordinates geo)) (first (:translate trans))) (first (:scale trans))))
-             (maybe-round (/ (- (second (:coordinates geo)) (second (:translate trans))) (second (:scale trans))))])
-        (if (= (:type geo) "MultiPoint")
-          (assoc geo :coordinates 
-            (mapv 
-              (fn [point]
-                [(maybe-round (/ (- (first point)  (first (:translate trans))) (first (:scale trans))))
-                 (maybe-round (/ (- (second point) (second (:translate trans))) (second (:scale trans))))])
-              (:coordinates geo)))
-          geo)))
-    geos))
-
-(defn transform-points
-  [topo] 
-   (assoc topo :objects 
-    (apply merge
-      (map (partial run (partial transform-points-0 (:transform topo)) :geometries) (:objects topo)))))
-
-(defn geom
-  [geo] 
-  {(keyword (:id geo))
-    (no-nil
-      {:type "GeometryCollection"
-       :id (:id geo)
-       :properties (:properties geo)
-       :geometries (:features geo)})})
-
-(defn topo
-  [ & geos ]
-  {:type "Topology"
-   :objects 
-    (apply merge
-      (map geom geos))})
+        (mapv delta arcs-raw))
+)
+        )
+    }))
 
 (defn geo2topo
-  [ & geos ]
-  (-> (apply topo geos)
-      (extract-in)
-      (cut)
-      (extract-out)
-      (translate)
-      (scale)
-      (transform-points)
-      (sequentialize)
-      ))
+  [ & geos ] 
+  (dissoc (processor {:geos geos})
+    :topo
+    :feats
+    :all-arcs
+    :all-raw-arcs
+    :all-coords
+    :all-coords-raw
+    :arcs-idx
+    :geos-transformed
+    :quantum
+    :junctions
+    :objects-raw
+    :feats-raw
+    :objects-cut
+    :feats-arced))
 
 (defn write-json
   [dest topo] 
