@@ -6,7 +6,7 @@
   (:require [clojure.data.json :as json]))
 
 (def ^:dynamic *q* 1e4)
-(def ^:dynamic *type* double)
+(def ^:dynamic *type* float)
 
 (defn collect-coords
   "Collect all coordinates from a feature, acording to its type."
