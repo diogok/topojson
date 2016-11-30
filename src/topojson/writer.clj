@@ -3,7 +3,9 @@
   (:require [plumbing.graph :as graph])
   (:require [com.rpl.specter :refer :all])
   (:require [topojson.reader :refer [maybe-round no-nil]])
-  (:require [clojure.data.json :as json]))
+  (:require [clojure.data.json :as json])
+  
+  (:gen-class))
 
 (def ^:dynamic *q* 1e4)
 (def ^:dynamic *type* float)
@@ -180,28 +182,36 @@
                   (not (= (:type (:geometry feat)) "MultiPoint")))
                   (:coordinates (:geometry feat)))}))
 
+(defn all-coords-raw
+  [geos] 
+    (->> geos
+       (select [ALL :features ALL :geometry])
+       (map collect-coords)
+       (apply concat)
+       (map distinct-fast)
+       (apply concat)))
+
+(defn transform-geos [geos transform]
+  (compiled-transform geos-sel
+    (partial feat-transform transform)
+    geos))
+
 (def processor
  (graph/compile 
-   {:type (fnk [] "Topology" )
-    :all-coords-raw
-      (fnk [geos] 
-        (->> geos
-           (select [ALL :features ALL :geometry])
-           (map collect-coords)
-           (apply concat)
-           (map distinct-fast)
-           (apply concat)))
-    :quantum
-      (fnk [all-coords-raw]
+   {:type (fnk [] "Topology")
+    :transform
+      (fnk [geos]
         (if (not *q*)
-          {:scale  [ 1 1]
+          {:scale  [1 1]
            :translate [1 1]}
-         (let [lngs  (distinct-fast (map first all-coords-raw))
-               lats  (distinct-fast (map second all-coords-raw))
+         (let [all-coords-raw (all-coords-raw geos)
 
+               lngs  (map first all-coords-raw)
                x0 (apply min lngs)
-               y0 (apply min lats)
                x1 (apply max lngs)
+
+               lats  (map second all-coords-raw)
+               y0 (apply min lats)
                y1 (apply max lats)
 
                xd (- x1 x0)
@@ -214,18 +224,10 @@
                kx (if (zero? xd) 1 (/ qd xd))
                ky (if (zero? yd) 1 (/ qd yd))]
              {:scale  [(/ 1 kx) (/ 1 ky)]
-              :translate [x0 y0]}
-             )
-           ))
-    :transform (fnk [quantum] quantum)
-    :geos-transformed
-      (fnk [geos quantum]
-        (compiled-transform geos-sel
-          (partial feat-transform quantum)
-          geos))
+              :translate [x0 y0]})))
     :objects-raw
-      (fnk [geos-transformed] 
-        (for-map [geo geos-transformed]
+      (fnk [geos transform] 
+        (for-map [geo (transform-geos geos transform)]
           (keyword (or (:id geo) (str "geo" (hash geo))))
           (no-nil
             {:type "GeometryCollection"
@@ -267,13 +269,13 @@
           (get arcs-raw i) i))
     :objects 
       (fnk [arcs-idx objects-cut]
-          (transform
-            [ALL LAST :geometries ALL]
-            (partial extract-arcs arcs-idx)
-            objects-cut))
+        (transform
+          [ALL LAST :geometries ALL]
+          (partial extract-arcs arcs-idx)
+          objects-cut))
     :arcs 
      (fnk [arcs-raw]
-        (mapv delta arcs-raw))
+      (mapv delta arcs-raw))
     }))
 
 (defn geo2topo
@@ -281,7 +283,6 @@
   [ & geos ] 
   (dissoc (processor {:geos geos})
     :all-coords-raw
-    :quantum
     :geos-transformed
     :objects-raw
     :all-coords

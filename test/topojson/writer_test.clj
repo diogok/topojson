@@ -91,6 +91,8 @@
   (let [both-topo (read-json (slurp (clojure.java.io/resource "test/both.json")))
         [ti-geo uc-geo]  (:features (topo2geo both-topo))
         my-topo (time (binding [*type* float] (geo2topo ti-geo uc-geo)))]
+    (dotimes [x 1]
+      (time (geo2topo ti-geo uc-geo)))
     (write-json "test.json" my-topo)
     ))
 
