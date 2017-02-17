@@ -105,15 +105,15 @@
                             [[2 2] [1 1] [-1 -1]]])
            {:type "MultiPolygon" :arcs [[[0]] [[1]]]})))))
 
-(def both-topo (read-json (slurp (clojure.java.io/resource "test/both.json"))))
+(def both-topo (read-json (slurp "test/data/tis_ucs.topo.json")))
 
 (facts "decode-full-topology"
   (fact "Full decoding"
     (is 
       (=
        {:type "FeatureCollection"
-        :features [(assoc (read-json (slurp (clojure.java.io/resource "test/ex.geo.json"))) :id "example")]}
-       (topo2geo (read-json (slurp (clojure.java.io/resource "test/ex.topo.json"))))))
+        :features [(assoc (read-json (slurp "test/data/ex.geo.json")) :id "example")]}
+       (topo2geo (read-json (slurp "test/data/ex.topo.json")))))
     (let [geo (topo2geo both-topo) 
           [ti ucs] (:features geo)]
       (is (= [-52.05331035490713 -14.414089852193786] 

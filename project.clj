@@ -8,6 +8,7 @@
                  [com.rpl/specter "0.13.1"]]
   :global-vars {*warn-on-reflection* true}
   :source-paths ["src"]
+  :repositories [["clojars" {:sign-releases false}]]
   :profiles {:uberjar {:aot :all}
              :dev {:dependencies [[midje "1.7.0"]]
                    :plugins [[lein-midje "3.1.3"]]}})
