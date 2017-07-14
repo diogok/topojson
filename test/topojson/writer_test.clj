@@ -1,5 +1,5 @@
 (ns topojson.writer-test
-  (:use [topojson.reader :only [read-json topo2geo]])
+  (:use [topojson.reader :only [read-json topo2geo topo2geo-clj]])
   (:use [clojure.set])
   (:require [plumbing.core :refer :all])
   (:require [midje.sweet :refer :all]
@@ -74,8 +74,8 @@
                       [[1 1]]
                       [[1 0]]
                       [[4 4] [1 1] [2 2]]]}]
-     (binding [*q* false] (geo2topo geo)) => topo
-     (first (:features (topo2geo topo))) => geo))
+     (binding [*q* false] (geo2topo-clj geo)) => topo
+     (first (:features (topo2geo-clj topo))) => geo))
 
 (fact "Example convertion"
   (let [ex-geo-src  (read-json (slurp "test/data/ex.geo.json"))

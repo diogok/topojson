@@ -308,7 +308,7 @@
       (.eval ^String (slurp (clojure.java.io/resource "topojson@3.0.0.js") ))
       (.put "geojson" geojson)
       (.eval "var geoj = JSON.parse(geojson)")
-      (.eval "var topoj = topojson.topology(geoj)")
+      (.eval "var topoj = topojson.topology(geoj,1e4)")
       (.eval "var topojson = JSON.stringify(topoj)"))
     (json/read-str (.get js "topojson") :key-fn keyword)))
 

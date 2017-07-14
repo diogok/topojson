@@ -106,13 +106,13 @@
       (into [] (map (partial get-lines arcs) (:arcs object)))
     nil))
 
-(defn topo2geo
+(defn topo2geo-clj
   "Converts a topojson into a geojson"
   ([topo]
    {:type "FeatureCollection"
     :features (into []
                 (map 
-                  (partial topo2geo (:transform topo) (decode-arcs topo (:arcs topo)))
+                  (partial topo2geo-clj (:transform topo) (decode-arcs topo (:arcs topo)))
                   (mapv must-have-id (:objects topo))))})
   ([transform arcs object]
    (condp = (:type object)
@@ -121,11 +121,47 @@
           {:type "FeatureCollection"
            :id (:id object)
            :properties (:properties object)
-           :features (into [] (map (comp no-nil (partial topo2geo transform arcs)) (:geometries object)))})
+           :features (into [] (map (comp no-nil (partial topo2geo-clj transform arcs)) (:geometries object)))})
      {:type "Feature"
       :id (:id object)
       :properties (:properties object)
       :geometry {
         :type (:type object)
         :coordinates (decode-object-coordinates transform arcs object)}})))
+
+(defn ^jdk.nashorn.api.scripting.NashornScriptEngine start-engine
+  []
+  (.getEngineByName (javax.script.ScriptEngineManager.) "nashorn"))
+
+(defn topo2geo-js-0
+  [topo col]
+  (let [js       (start-engine)
+        topojson ^String (json/write-str topo)
+        obj-json ^String (json/write-str col)]
+    (doto js
+      (.eval ^String (slurp (clojure.java.io/resource "topojson@3.0.0.js") ))
+      (.put "obj_json"  obj-json)
+      (.put "topo_json" topojson)
+      (.eval "var obj   = JSON.parse(obj_json)")
+      (.eval "var topoj = JSON.parse(topo_json)")
+      (.eval "var geoj  = topojson.feature(topoj,obj)")
+      (.eval "var geojson = JSON.stringify(geoj)"))
+    (json/read-str (.get js "geojson") :key-fn keyword)))
+
+(defn topo2geo-js
+  "Converts a topojson into a geojson"
+  [topo]
+   {:type "FeatureCollection"
+    :features
+      (mapv
+        (partial topo2geo-js-0 topo)
+        (mapv
+          must-have-id
+          (:objects topo))
+        )})
+
+(defn topo2geo
+  "Converts a topojson into a geojson"
+  [topo]
+    (topo2geo-js topo))
 
