@@ -278,7 +278,7 @@
       (mapv delta arcs-raw))
     }))
 
-(defn geo2topo
+(defn geo2topo-clj
   "Convert all geojson to a single topojson"
   [ & geos ] 
   (dissoc (processor {:geos geos})
@@ -290,6 +290,29 @@
     :objects-cut
     :arcs-raw
     :arcs-idx))
+
+(defn ^jdk.nashorn.api.scripting.NashornScriptEngine start-engine
+  []
+  (.getEngineByName (javax.script.ScriptEngineManager.) "nashorn"))
+
+(defn make-id
+  [geo]
+    (keyword (or (:id geo) (str "geo" (hash geo)))))
+
+(defn geo2topo-js
+  "Convert all geojson to a single topojson"
+  [ & geos ]
+  (let [js      (start-engine)
+        geojson ^String (json/write-str (reduce merge {} (map #(hash-map ( make-id %) %) geos)))]
+    (doto js
+      (.eval ^String (slurp (clojure.java.io/resource "topojson@3.0.0.js") ))
+      (.put "geojson" geojson)
+      (.eval "var geoj = JSON.parse(geojson)")
+      (.eval "var topoj = topojson.topology(geoj)")
+      (.eval "var topojson = JSON.stringify(topoj)"))
+    (json/read-str (.get js "topojson") :key-fn keyword)))
+
+(def geo2topo geo2topo-js)
 
 (defn write-json
   "Write json to file dest"

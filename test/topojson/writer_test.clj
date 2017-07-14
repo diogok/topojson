@@ -77,7 +77,6 @@
      (binding [*q* false] (geo2topo geo)) => topo
      (first (:features (topo2geo topo))) => geo))
 
-
 (fact "Example convertion"
   (let [ex-geo-src  (read-json (slurp "test/data/ex.geo.json"))
         ex-topo-src (read-json (slurp "test/data/ex.topo.json"))
@@ -86,5 +85,4 @@
     (dissoc-in ex-topo-dst [:objects :example :id]) => ex-topo-src
     (dissoc ex-geo-dst :id) => ex-geo-src
     (write-json "ex.topo.json" ex-topo-dst)))
-
 

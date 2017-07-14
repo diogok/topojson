@@ -6,10 +6,10 @@
             [topojson.writer :refer :all]))
 
 (fact "Example convertion"
-  (let [ex-uc-topo  (read-json (slurp "test/data/ucs.topo.json"))
-        ex-ti-topo  (read-json (slurp "test/data/ti.topo.json"))
-        ti-geo      (topo2geo ex-ti-topo)
-        uc-geo      (topo2geo ex-uc-topo)]
-    (write-json "ti.geo.json" (first (:features ti-geo)))
-    (write-json "uc.geo.json" (first (:features uc-geo)))
+  (let [ex-3-topo  (read-json (slurp "test/data/br_admin_level_3.topo.json"))
+        ex-4-topo  (read-json (slurp "test/data/br_admin_level_4.topo.json"))
+        ex-3-geo   (topo2geo ex-3-topo)
+        ex-4-geo   (topo2geo ex-4-topo)]
+    (write-json "al3.geo.json" (first (:features ex-3-geo)))
+    (write-json "al4.geo.json" (first (:features ex-4-geo)))
     ))

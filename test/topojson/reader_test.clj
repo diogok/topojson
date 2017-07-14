@@ -105,19 +105,11 @@
                             [[2 2] [1 1] [-1 -1]]])
            {:type "MultiPolygon" :arcs [[[0]] [[1]]]})))))
 
-(def both-topo (read-json (slurp "test/data/tis_ucs.topo.json")))
-
 (facts "decode-full-topology"
   (fact "Full decoding"
     (is 
       (=
        {:type "FeatureCollection"
         :features [(assoc (read-json (slurp "test/data/ex.geo.json")) :id "example")]}
-       (topo2geo (read-json (slurp "test/data/ex.topo.json")))))
-    (let [geo (topo2geo both-topo) 
-          [ti ucs] (:features geo)]
-      (is (= [-52.05331035490713 -14.414089852193786] 
-             (get-in ti [:features 0 :geometry :coordinates 0 0])))
-      (is (= [-40.97051904917276 -20.063224909534622]
-             (get-in ucs [:features 0 :geometry :coordinates 0 0]))))))
+       (topo2geo (read-json (slurp "test/data/ex.topo.json")))))))
 
