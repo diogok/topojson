@@ -82,7 +82,15 @@
         ex-topo-src (read-json (slurp "test/data/ex.topo.json"))
         ex-topo-dst (binding [*type* float] (geo2topo (assoc ex-geo-src :id "example") ))
         ex-geo-dst  (first (:features (topo2geo ex-topo-dst)))]
-    (dissoc-in ex-topo-dst [:objects :example :id]) => ex-topo-src
+    (dissoc (dissoc-in ex-topo-dst [:objects :example :id]) :bbox) => ex-topo-src
     (dissoc ex-geo-dst :id) => ex-geo-src
     (write-json "ex.topo.json" ex-topo-dst)))
 
+(fact "Example convertion native"
+  (let [ex-geo-src  (read-json (slurp "test/data/ex.geo.json"))
+        ex-topo-src (read-json (slurp "test/data/ex.topo.json"))
+        ex-topo-dst (binding [*type* float] (geo2topo-clj (assoc ex-geo-src :id "example") ))
+        ex-geo-dst  (first (:features (topo2geo ex-topo-dst)))]
+    (dissoc (dissoc-in ex-topo-dst [:objects :example :id]) :bbox) => ex-topo-src
+    (dissoc ex-geo-dst :id) => ex-geo-src
+    (write-json "ex.topo.clj.json" ex-topo-dst)))
